@@ -1,0 +1,62 @@
+version: "3.9"
+services:
+  init:
+    image: docusaurus
+    container_name: init_docusaurus
+    working_dir: /app/site
+    # restart: always
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:lts-bookworm-slim
+        RUN echo 'alias ll="ls -lrt"' >> /root/.bashrc
+        RUN echo 'set -o vi' >> /root/.bashrc
+        RUN apt-get update && apt-get install -y vim && apt-get install -y rsync
+        RUN mkdir /tmp_first_install && cd /tmp_first_install && npx create-docusaurus@latest site classic
+        RUN mkdir -p /app/site
+    ports:
+      - "3000:3000"
+    command:
+    - /bin/bash
+    - -c
+    - |
+      if [ ! -d /app/site/src/pages ] ; then
+        rsync -av --exclude 'node_modules' /tmp_first_install/site/ /app/site
+      fi
+    volumes:
+      - ./site:/app/site
+
+
+  docusaurus:
+    image: docusaurus
+    container_name: docusaurus
+    working_dir: /app/site
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    build:
+      dockerfile_inline: |
+        FROM docusaurus
+        RUN rsync -av /tmp_first_install/site/node_modules/ /app/site/node_modules
+        RUN cd /app/site && npm install --save @docusaurus/preset-classic && npm install --save @docusaurus/theme-mermaid
+    command:
+    - /bin/bash
+    - -c
+    - |
+      cd /app/site
+      npm run start -- --host "0.0.0.0" --poll 3000
+      # tail -f
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./site/src:/app/site/src
+      - ./site/blog:/app/site/blog
+      - ./site/docs:/app/site/docs
+      - ./site/static:/app/site/static
+      - ./site/sidebars.js:/app/site/sidebars.js
+      - ./site/package.json:/app/site/package.json
+      - ./site/docusaurus.config.js:/app/site/docusaurus.config.js
+      - ./site/babel.config.js:/app/site/babel.config.js
+      - ./site/README.md:/app/site/README.md
+      - ./site/package-lock.json:/app/site/package-lock.json
+    

@@ -1,0 +1,33 @@
+- hosts: localhost
+  gather_facts: no
+  tasks:
+
+  - name: build images
+    shell: docker compose build
+
+  - name: create first site base
+    shell: docker compose up init
+
+  - name: eneable mermaid feature
+    copy: src=templates/docusaurus.config.js dest=site/docusaurus.config.js
+
+  - name: add bonus markdown page
+    copy: src=files/bonus.md dest=site/docs
+
+  - name: start site
+    shell: docker compose up -d
+
+  - name: wait for docusaurus available
+    uri:
+      url: "http://localhost:3000"
+      return_content: true
+      status_code: [200,-1]
+    register: check_docu_site
+    tags: ['wait']
+    delay: 3
+    retries: 10
+    until: check_docu_site.content | regex_search('__docusaurus') == "__docusaurus"
+  
+  - name: Success
+    debug:
+      msg: "connect to http://localhost:3000 and enjoy !!!"
